@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\API\EventController;
 use App\Http\Controllers\API\AttendanceController;
 
