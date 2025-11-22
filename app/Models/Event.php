@@ -9,42 +9,28 @@ class Event extends Model
 {
     use HasFactory;
 
+    // Các trường cho phép thêm/sửa (khớp với migration mới)
     protected $fillable = [
         'title',
         'description',
-        'start_date',
-        'end_date',
         'location',
+        'start_date',
+        'start_time',
+        'max_attendees',
+        'image',
         'status',
-        'created_by',
-        'max_participants'
+        'user_id'
     ];
 
-    protected $casts = [
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
-    ];
-
-    // Relationships
-    public function creator()
+    // Quan hệ: Sự kiện thuộc về 1 User
+    public function user()
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class);
     }
 
+    // Quan hệ: Sự kiện có nhiều người tham gia
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
-    }
-
-    public function assignments()
-    {
-        return $this->hasMany(EventAssignment::class);
-    }
-
-    public function attendees()
-    {
-        return $this->belongsToMany(User::class, 'attendances')
-                    ->withPivot('status', 'checked_in_at')
-                    ->withTimestamps();
     }
 }
