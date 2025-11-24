@@ -31,3 +31,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{eventId}/attendees', [AttendanceController::class, 'getAttendees']);
     Route::get('/my-events', [AttendanceController::class, 'myEvents']);
 });
+
+
+// Update code ngày 24/11
