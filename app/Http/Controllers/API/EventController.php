@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Requests\StoreEventRequest;
+use App\Http\Requests\UpdateEventRequest;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventAssignment;
@@ -12,6 +14,7 @@ class EventController extends Controller
 {
     /**
      * Display a listing of events
+     * GET /api/v1/events
      */
     public function index(Request $request)
     {
@@ -52,33 +55,20 @@ class EventController extends Controller
 
     /**
      * Store a newly created event
+     * POST /api/v1/events
+     * Uses StoreEventRequest for validation
      */
-    public function store(Request $request)
+    public function store(StoreEventRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
-            'location' => 'nullable|string|max:255',
-            'max_participants' => 'nullable|integer|min:1',
-            'status' => 'nullable|in:draft,published,completed,cancelled',
-            'created_by' => 'required|exists:users,id'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            $data = $request->all();
-            $data['status'] = $data['status'] ?? 'draft';
+            // Data đã được validate tự động bởi StoreEventRequest
+            $validated = $request->validated();
             
-            $event = Event::create($data);
+            // Set default status if not provided (đã handle trong prepareForValidation)
+            $validated['status'] = $validated['status'] ?? 'draft';
+            
+            // Create event
+            $event = Event::create($validated);
 
             return response()->json([
                 'success' => true,
@@ -96,6 +86,7 @@ class EventController extends Controller
 
     /**
      * Display the specified event
+     * GET /api/v1/events/{id}
      */
     public function show($id)
     {
@@ -122,6 +113,7 @@ class EventController extends Controller
 
     /**
      * Update the specified event
+     * PUT/PATCH /api/v1/events/{id}
      */
     public function update(Request $request, $id)
     {
@@ -163,6 +155,7 @@ class EventController extends Controller
 
     /**
      * Remove the specified event
+     * DELETE /api/v1/events/{id}
      */
     public function destroy($id)
     {
