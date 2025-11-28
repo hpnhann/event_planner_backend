@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Resources\EventResource;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Http\Controllers\Controller;
@@ -39,11 +40,8 @@ class EventController extends Controller
             $perPage = $request->get('per_page', 10);
             $events = $query->orderBy('start_date', 'desc')->paginate($perPage);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Events retrieved successfully',
-                'data' => $events
-            ], 200);
+            return EventResource::collection($events);
+           
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -63,18 +61,16 @@ class EventController extends Controller
         try {
             // Data đã được validate tự động bởi StoreEventRequest
             $validated = $request->validated();
-            
-            // Set default status if not provided (đã handle trong prepareForValidation)
             $validated['status'] = $validated['status'] ?? 'draft';
             
             // Create event
             $event = Event::create($validated);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Event created successfully',
-                'data' => $event->load('creator')
-            ], 201);
+            return new EventResource($event->load('creator'));
+            // return response()->json([
+            //     'success' => true,
+            //     'message' => 'Event created successfully',
+            //     'data' => $event->load('creator')
+            // ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -96,12 +92,12 @@ class EventController extends Controller
 
             // Add participant count
             $event->participant_count = $event->eventAssignments()->count();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Event retrieved successfully',
-                'data' => $event
-            ], 200);
+            return new EventResource($event);
+            // return response()->json([
+            //     'success' => true,
+            //     'message' => 'Event retrieved successfully',
+            //     'data' => $event
+            // ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
