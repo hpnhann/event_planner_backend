@@ -18,11 +18,28 @@ class Streak extends Model
 
     protected $casts = [
         'last_attendance_date' => 'date',
+        'current_streak' => 'integer',
+        'longest_streak' => 'integer',
     ];
 
-    // Relationship
+    /**
+     * Get the user that owns this streak
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Check if streak is active (attended within last 24 hours)
+     */
+    public function isActive(): bool
+    {
+        if (!$this->last_attendance_date) {
+            return false;
+        }
+        
+        return $this->last_attendance_date->isToday() || 
+               $this->last_attendance_date->isYesterday();
     }
 }

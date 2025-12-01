@@ -12,22 +12,66 @@ class Attendance extends Model
     protected $fillable = [
         'event_id',
         'user_id',
+        'check_in_time',
+        'check_out_time',
         'status',
-        'checked_in_at',
+        'notes',
     ];
 
     protected $casts = [
-        'checked_in_at' => 'datetime',
+        'check_in_time' => 'datetime',
+        'check_out_time' => 'datetime',
     ];
 
-    // Relationships
+    /**
+     * Get the event
+     */
     public function event()
     {
         return $this->belongsTo(Event::class);
     }
 
+    /**
+     * Get the user
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Scope: Present attendances
+     */
+    public function scopePresent($query)
+    {
+        return $query->where('status', 'present');
+    }
+
+    /**
+     * Scope: Absent attendances
+     */
+    public function scopeAbsent($query)
+    {
+        return $query->where('status', 'absent');
+    }
+
+    /**
+     * Scope: Late attendances
+     */
+    public function scopeLate($query)
+    {
+        return $query->where('status', 'late');
+    }
+
+    /**
+     * Calculate duration in minutes
+     */
+    public function getDurationAttribute(): ?int
+    {
+        if (!$this->check_in_time || !$this->check_out_time) {
+            return null;
+        }
+        
+        return $this->check_in_time->diffInMinutes($this->check_out_time);
     }
 }
