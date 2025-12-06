@@ -9,66 +9,70 @@ class EventAssignment extends Model
 {
     use HasFactory;
 
+    // Map to table 'event_registrations'
+    protected $table = 'event_registrations';
+
     protected $fillable = [
-        'event_id',
         'user_id',
+        'event_id',
         'role_id',
+        'notes',
+        'registration_date',
         'status',
     ];
 
-    /**
-     * Get the event
-     */
+    protected $casts = [
+        'registration_date' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    // ========== RELATIONSHIPS ==========
+    
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 's_no');
+    }
+
     public function event()
     {
         return $this->belongsTo(Event::class);
     }
 
-    /**
-     * Get the user
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Get the role
-     */
     public function role()
     {
         return $this->belongsTo(Role::class);
     }
 
-    /**
-     * Scope: Get registered assignments
-     */
-    public function scopeRegistered($query)
+    // ========== SCOPES ==========
+    
+    public function scopeApproved($query)
     {
-        return $query->where('status', 'registered');
+        return $query->where('status', 'approved');
     }
 
-    /**
-     * Scope: Get confirmed assignments
-     */
-    public function scopeConfirmed($query)
+    public function scopePending($query)
     {
-        return $query->where('status', 'confirmed');
+        return $query->where('status', 'pending');
     }
 
-    /**
-     * Scope: Get cancelled assignments
-     */
-    public function scopeCancelled($query)
+    // ========== HELPER METHODS ==========
+    
+    public function approve(): bool
     {
-        return $query->where('status', 'cancelled');
+        $this->status = 'approved';
+        return $this->save();
     }
 
-    /**
-     * Check if user has attended
-     */
-    public function hasAttended(): bool
+    public function reject(): bool
     {
-        return $this->status === 'attended';
+        $this->status = 'rejected';
+        return $this->save();
+    }
+
+    public function cancel(): bool
+    {
+        $this->status = 'cancelled';
+        return $this->save();
     }
 }

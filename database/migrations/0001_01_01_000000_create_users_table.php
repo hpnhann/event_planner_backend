@@ -3,6 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+
 
 return new class extends Migration
 {
@@ -15,18 +17,29 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
+            $table->timestamp('email_verified_at')->nullable(); // Giữ lại cái này của Laravel
             $table->string('password');
-            $table->rememberToken();
+            
+            // --- CÁC CỘT BẠN THÊM VÀO (Từ đồ án cũ) ---
+            $table->enum('role', ['admin', 'teacher', 'student', 'owner'])->default('student');
+            $table->string('phone')->nullable();
+            $table->text('address')->nullable();
+            $table->string('profile_image')->nullable();
+            $table->enum('status', ['active', 'inactive'])->default('active');
+            // -------------------------------------------
+
+            $table->rememberToken(); // Giữ lại cái này cho chức năng "Ghi nhớ đăng nhập"
             $table->timestamps();
         });
 
+        // Giữ nguyên bảng này để chức năng quên mật khẩu hoạt động
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
 
+        // Giữ nguyên bảng này để lưu phiên đăng nhập
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();
@@ -42,7 +55,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         Schema::dropIfExists('users');
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }

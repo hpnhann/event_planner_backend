@@ -2,138 +2,90 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Models\Role;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    protected $primaryKey = 's_no';
+    
     protected $fillable = [
+        'id',
         'name',
+        'full_name',
         'email',
-        'password',
-    ];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
-    protected $hidden = [
-        'password',
+        'password_hash',
+        'role',
+        'theme',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    protected $hidden = [
+        'password_hash',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    public function getAuthPassword()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->password_hash;
     }
 
-    // ============================================
-    // RELATIONSHIPS
-    // ============================================
-
-    /**
-     * Many-to-Many: User has many Roles
-     */
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class)->withTimestamps();
-    }
-
-    /**
-     * One-to-Many: User creates many Events
-     */
+    // ========== RELATIONSHIPS ==========
+    
     public function events()
     {
-        return $this->hasMany(Event::class, 'created_by');
+        return $this->hasMany(Event::class, 'created_by', 'id');
     }
 
-    /**
-     * Alias for events relationship (better naming)
-     */
     public function createdEvents()
     {
-        return $this->hasMany(Event::class, 'created_by');
+        return $this->hasMany(Event::class, 'created_by', 'id');
     }
 
-    /**
-     * One-to-Many: User has many Attendances
-     */
-    public function attendances()
-    {
-        return $this->hasMany(Attendance::class);
-    }
-
-    /**
-     * One-to-One: User has one Streak
-     */
-    public function streak()
-    {
-        return $this->hasOne(Streak::class);
-    }
-
-    /**
-     * One-to-Many: User has many Event Assignments (registrations)
-     */
     public function eventAssignments()
     {
-        return $this->hasMany(EventAssignment::class);
+        return $this->hasMany(EventAssignment::class, 'user_id', 's_no');
     }
 
-    /**
-     * Many-to-Many: User registered for many Events (through event_assignments)
-     */
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class, 'user_id', 's_no');
+    }
+
+    public function streak()
+    {
+        return $this->hasOne(Streak::class, 'user_id', 's_no');
+    }
+
     public function registeredEvents()
     {
-        return $this->belongsToMany(Event::class, 'event_assignments')
-            ->withPivot('role_id', 'status')
+        return $this->belongsToMany(Event::class, 'event_registrations', 'user_id', 'event_id')
+            ->withPivot('role_id', 'status', 'notes')
             ->withTimestamps();
     }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
-
-    /**
-     * Check if user has a specific role
-     */
+    // ========== HELPER METHODS ==========
+    
     public function hasRole($roleName): bool
     {
-        return $this->roles()->where('name', $roleName)->exists();
+        return $this->role === $roleName;
     }
 
-    /**
-     * Check if user has any of the given roles
-     */
     public function hasAnyRole(array $roles): bool
     {
-        return $this->roles()->whereIn('name', $roles)->exists();
+        return in_array($this->role, $roles);
     }
 
-    /**
-     * Check if user is registered for a specific event
-     */
     public function isRegisteredFor(int $eventId): bool
     {
         return $this->eventAssignments()
@@ -141,17 +93,11 @@ class User extends Authenticatable
             ->exists();
     }
 
-    /**
-     * Get user's current streak count
-     */
     public function getCurrentStreak(): int
     {
         return $this->streak ? $this->streak->current_streak : 0;
     }
 
-    /**
-     * Get user's longest streak count
-     */
     public function getLongestStreak(): int
     {
         return $this->streak ? $this->streak->longest_streak : 0;

@@ -3,213 +3,205 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Event;
 use App\Models\Attendance;
+use App\Models\EventRegistration;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class AttendanceController extends Controller
 {
     /**
-     * Display a listing of attendances
-     * GET /api/attendances
+     * Check-in to event
+     * POST /api/events/{eventId}/checkin
      */
-    public function index(): JsonResponse
+    public function checkIn(Request $request, $eventId)
     {
         try {
-            $attendances = Attendance::with(['event', 'user'])
-                ->orderBy('check_in_time', 'desc')
-                ->paginate(15);
+            $event = Event::findOrFail($eventId);
+            $userId = Auth::user()->s_no;
 
-            return response()->json([
-                'success' => true,
-                'data' => $attendances
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch attendances',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
+            // Validate
+            $validator = Validator::make($request->all(), [
+                'notes' => 'nullable|string|max:500',
+            ]);
 
-    /**
-     * Store a new attendance (Check-in)
-     * POST /api/attendances
-     */
-    public function store(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'event_id' => 'required|exists:events,id',
-            'user_id' => 'required|exists:users,id',
-            'check_in_time' => 'required|date',
-            'status' => 'required|in:present,absent,late',
-            'notes' => 'nullable|string|max:500'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            // Check duplicate check-in
-            $exists = Attendance::where('event_id', $request->event_id)
-                ->where('user_id', $request->user_id)
-                ->exists();
-
-            if ($exists) {
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User already checked in for this event'
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Check if user registered for event
+            $registration = EventRegistration::where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$registration) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You must register for this event first'
+                ], 400);
+            }
+
+            // Check if already checked in
+            $existingAttendance = Attendance::where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($existingAttendance) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already checked in to this event'
                 ], 409);
             }
 
-            $attendance = Attendance::create($request->all());
+            // Create attendance record
+            $attendance = Attendance::create([
+                'event_id' => $eventId,
+                'user_id' => $userId,
+                'status' => 'present',
+                'check_in_time' => now(),
+                'notes' => $request->notes,
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Check-in successful',
+                'message' => 'Successfully checked in to event',
                 'data' => $attendance->load(['event', 'user'])
             ], 201);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create attendance',
+                'message' => 'Failed to check in',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Display specific attendance
-     * GET /api/attendances/{id}
+     * Check-out from event
+     * POST /api/events/{eventId}/checkout
      */
-    public function show(string $id): JsonResponse
+    public function checkOut($eventId)
     {
         try {
-            $attendance = Attendance::with(['event', 'user'])->findOrFail($id);
+            $userId = Auth::user()->s_no;
+
+            $attendance = Attendance::where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$attendance) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have not checked in to this event'
+                ], 404);
+            }
+
+            if ($attendance->check_out_time) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already checked out'
+                ], 409);
+            }
+
+            $attendance->update([
+                'check_out_time' => now(),
+            ]);
 
             return response()->json([
                 'success' => true,
+                'message' => 'Successfully checked out from event',
                 'data' => $attendance
             ], 200);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Attendance not found'
-            ], 404);
-        }
-    }
-
-    /**
-     * Update attendance (e.g., add check-out time)
-     * PUT/PATCH /api/attendances/{id}
-     */
-    public function update(Request $request, string $id): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'check_out_time' => 'nullable|date|after:check_in_time',
-            'status' => 'sometimes|in:present,absent,late',
-            'notes' => 'nullable|string|max:500'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation error',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            $attendance = Attendance::findOrFail($id);
-            $attendance->update($request->all());
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Attendance updated successfully',
-                'data' => $attendance->load(['event', 'user'])
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update attendance',
+                'message' => 'Failed to check out',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Delete attendance record
-     * DELETE /api/attendances/{id}
+     * Get event attendees (who checked in)
+     * GET /api/events/{eventId}/attendees
      */
-    public function destroy(string $id): JsonResponse
+    public function getAttendees($eventId)
     {
         try {
-            $attendance = Attendance::findOrFail($id);
-            $attendance->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Attendance deleted successfully'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete attendance'
-            ], 500);
-        }
-    }
-
-    /**
-     * Get attendances by event
-     * GET /api/events/{eventId}/attendances
-     */
-    public function getByEvent(string $eventId): JsonResponse
-    {
-        try {
-            $attendances = Attendance::with('user')
+            $event = Event::findOrFail($eventId);
+            
+            $attendees = Attendance::with('user')
                 ->where('event_id', $eventId)
                 ->orderBy('check_in_time', 'desc')
                 ->get();
 
             return response()->json([
                 'success' => true,
-                'data' => $attendances
+                'data' => [
+                    'event' => $event,
+                    'attendees' => $attendees,
+                    'total_attendees' => $attendees->count(),
+                ]
             ], 200);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch attendances'
+                'message' => 'Failed to fetch attendees',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Get user's attendance history
-     * GET /api/users/{userId}/attendances
+     * Get user's events (registered + attended)
+     * GET /api/my-events
      */
-    public function getByUser(string $userId): JsonResponse
+    public function myEvents(Request $request)
     {
         try {
-            $attendances = Attendance::with('event')
-                ->where('user_id', $userId)
-                ->orderBy('check_in_time', 'desc')
-                ->get();
+            $userId = Auth::user()->s_no;
+            $type = $request->query('type', 'all'); // all, registered, attended
+
+            $data = [];
+
+            if ($type === 'all' || $type === 'registered') {
+                // Events user registered for
+                $registrations = EventRegistration::with('event')
+                    ->where('user_id', $userId)
+                    ->orderBy('registration_date', 'desc')
+                    ->get();
+                
+                $data['registered_events'] = $registrations;
+            }
+
+            if ($type === 'all' || $type === 'attended') {
+                // Events user attended (checked in)
+                $attendances = Attendance::with('event')
+                    ->where('user_id', $userId)
+                    ->orderBy('check_in_time', 'desc')
+                    ->get();
+                
+                $data['attended_events'] = $attendances;
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $attendances
+                'data' => $data
             ], 200);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch user attendances'
+                'message' => 'Failed to fetch your events',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

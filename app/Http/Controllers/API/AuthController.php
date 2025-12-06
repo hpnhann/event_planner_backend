@@ -4,10 +4,10 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -16,32 +16,41 @@ class AuthController extends Controller
      */
     public function register(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed', // password_confirmation field
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:100',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6',
+            'role' => 'nullable|in:admin,teacher,student,organizer,participant',
         ]);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-        ]);
-
-        // Assign default role: participant
-        $participantRole = Role::where('name', 'participant')->first();
-        if ($participantRole) {
-            $user->roles()->attach($participantRole->id);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        // Create token
+        // Generate custom ID (giống _sms format)
+        $role = $request->role ?? 'participant';
+        $prefix = strtoupper(substr($role, 0, 1));
+        $customId = $prefix . time();
+
+        $user = User::create([
+            'id' => $customId,
+            'name' => $request->name,
+            'full_name' => $request->name,
+            'email' => $request->email,
+            'password_hash' => Hash::make($request->password),
+            'role' => $role,
+            'theme' => 'light',
+        ]);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registration successful',
-            'user' => $user->load('roles'),
-            'access_token' => $token,
-            'token_type' => 'Bearer',
+            'success' => true,
+            'token' => $token,
+            'user' => $user
         ], 201);
     }
 
@@ -50,31 +59,50 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required',
+            'password' => 'required|string',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+        if (!$user || !Hash::check($request->password, $user->password_hash)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials'
+            ], 401);
         }
 
-        // Delete old tokens (optional - single session)
-        // $user->tokens()->delete();
+        // Delete old tokens
+        $user->tokens()->delete();
 
         // Create new token
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login successful',
-            'user' => $user->load('roles'),
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-        ]);
+            'success' => true,
+            'token' => $token,
+            'user' => $user
+        ], 200);
+    }
+
+    /**
+     * Get authenticated user info
+     * GET /api/me
+     */
+    public function me(Request $request)
+    {
+        return response()->json([
+            'success' => true,
+            'user' => $request->user()
+        ], 200);
     }
 
     /**
@@ -86,17 +114,8 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([
-            'message' => 'Logout successful'
-        ]);
-    }
-
-    /**
-     * Get authenticated user
-     */
-    public function me(Request $request)
-    {
-        return response()->json([
-            'user' => $request->user()->load('roles', 'streak')
-        ]);
+            'success' => true,
+            'message' => 'Logged out successfully'
+        ], 200);
     }
 }

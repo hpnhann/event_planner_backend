@@ -10,106 +10,83 @@ class Event extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title',
-        'description',
-        'start_date',
-        'end_date',
-        'location',
-        'max_participants',
+        'event_title',
+        'event_description',
+        'event_location',
+        'event_date',
+        'event_time',                 
+        'created_by',      
+        'event_image',
         'status',
-        'created_by',
+        'max_volunteers',
+        'published_at',
     ];
 
     protected $casts = [
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
-        'max_participants' => 'integer',
+        'event_date' => 'date',
+        'published_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
-    /**
-     * Get the user who created this event
-     */
+    // ========== RELATIONSHIPS ==========
+    
     public function creator()
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by', 'id');
     }
 
-    /**
-     * Get all event assignments (registrations)
-     */
     public function eventAssignments()
     {
-        return $this->hasMany(EventAssignment::class);
+        return $this->hasMany(EventAssignment::class, 'event_id');
     }
 
-    /**
-     * Get all attendances (check-ins) for this event
-     */
+    public function registrations()
+    {
+        return $this->hasMany(EventRegistration::class, 'event_id');
+    }
+
     public function attendances()
     {
-        return $this->hasMany(Attendance::class);
+        return $this->hasMany(Attendance::class, 'event_id');
     }
 
-    /**
-     * Scope: Get only published events
-     */
+    // ========== SCOPES ==========
+    
     public function scopePublished($query)
     {
         return $query->where('status', 'published');
     }
 
-    /**
-     * Scope: Get upcoming events
-     */
     public function scopeUpcoming($query)
     {
-        return $query->where('start_date', '>', now());
+        return $query->where('event_date', '>=', today());
     }
 
-    /**
-     * Scope: Get past events
-     */
     public function scopePast($query)
     {
-        return $query->where('end_date', '<', now());
+        return $query->where('event_date', '<', today());
     }
 
-    /**
-     * Check if event is full
-     */
+    // ========== HELPER METHODS ==========
+    
     public function isFull(): bool
     {
-        if (!$this->max_participants) {
-            return false;
+        if (!$this->max_volunteers) {
+            return false; 
         }
         
-        return $this->eventAssignments()->count() >= $this->max_participants;
+        $registered = $this->registrations()
+                          ->whereIn('status', ['pending', 'approved'])
+                          ->count();
+        
+        return $registered >= $this->max_volunteers;
     }
 
-    /**
-     * Get available slots
-     */
-    public function getAvailableSlotsAttribute(): ?int
+    public function getRegisteredCountAttribute(): int
     {
-        if (!$this->max_participants) {
-            return null;
-        }
-        
-        $registered = $this->eventAssignments()->count();
-        return max(0, $this->max_participants - $registered);
-    }
-
-    /**
-     * Get attendance rate (percentage)
-     */
-    public function getAttendanceRateAttribute(): float
-    {
-        $registered = $this->eventAssignments()->count();
-        if ($registered === 0) {
-            return 0;
-        }
-        
-        $attended = $this->attendances()->where('status', 'present')->count();
-        return round(($attended / $registered) * 100, 2);
+        return $this->registrations()
+                    ->whereIn('status', ['pending', 'approved'])
+                    ->count();
     }
 }

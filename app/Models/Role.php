@@ -19,9 +19,17 @@ class Role extends Model
         'permissions' => 'array',
     ];
 
+    public function users()
+    {
+        return $this->belongsToMany(User::class);
+    }
     /**
      * Get all event assignments with this role
      */
+    public function role()
+{
+    return $this->belongsTo(Role::class);
+}    
     public function eventAssignments()
     {
         return $this->hasMany(EventAssignment::class);

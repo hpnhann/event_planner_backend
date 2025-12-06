@@ -1,123 +1,84 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
-use App\Http\Controllers\API\AttendanceController;
 use App\Http\Controllers\API\EventController;
-use App\Http\Controllers\API\EventAssignmentController;
-use App\Http\Controllers\API\RoleController;
-use App\Http\Controllers\API\StreakController;
+use App\Http\Controllers\API\EventRegistrationController;
+use App\Http\Controllers\API\AttendanceController;
+use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\NoticeController;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes - Event Planner
+| Public Routes
 |--------------------------------------------------------------------------
 */
 
-// Health check endpoint
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'service' => 'Event Planner API',
-        'version' => '1.0',
-        'timestamp' => now()->toIso8601String()
-    ]);
-});
+// Authentication
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
 
-Route::prefix('v1')->group(function () {
+// Public Events
+Route::get('/events', [EventController::class, 'index']);
+Route::get('/events/{id}', [EventController::class, 'show']);
+
+// Public Notices
+Route::get('/notices', [NoticeController::class, 'index']);
+Route::get('/notices/{id}', [NoticeController::class, 'show']);
+
+/*
+|--------------------------------------------------------------------------
+| Protected Routes (Authenticated Users)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware('auth:sanctum')->group(function () {
     
-    // ============================================
-    // EVENTS
-    // ============================================
-    Route::get('/events', [EventController::class, 'index']);
-    Route::post('/events', [EventController::class, 'store']);
-    Route::get('/events/{id}', [EventController::class, 'show']);
+    // Authentication
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+    
+    // Dashboard (role-based)
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/admin', [DashboardController::class, 'adminDashboard'])
+        ->middleware('role:admin');
+    Route::get('/dashboard/organizer', [DashboardController::class, 'organizerDashboard'])
+        ->middleware('role:organizer');
+    Route::get('/dashboard/participant', [DashboardController::class, 'participantDashboard'])
+        ->middleware('role:participant');
+    
+    // Events Management
+    Route::post('/events', [EventController::class, 'store'])
+        ->middleware('role:admin,organizer');
     Route::put('/events/{id}', [EventController::class, 'update']);
-    Route::patch('/events/{id}', [EventController::class, 'update']);
     Route::delete('/events/{id}', [EventController::class, 'destroy']);
     
-    // Event registration endpoints
-    Route::post('/events/{id}/register', [EventController::class, 'register']);
-    Route::post('/events/{id}/unregister', [EventController::class, 'unregister']);
-    Route::get('/events/{id}/participants', [EventController::class, 'getParticipants']);
+    // Event Registration (FIX - Point to EventRegistrationController)
+    Route::post('/events/{eventId}/register', [EventRegistrationController::class, 'register']);
+    Route::delete('/events/{eventId}/register', [EventRegistrationController::class, 'unregister']);
+    Route::get('/events/{eventId}/participants', [EventRegistrationController::class, 'getParticipants']);
     
-    // ============================================
-    // ATTENDANCES
-    // ============================================
-    Route::get('/attendances', [AttendanceController::class, 'index']);
-    Route::post('/attendances', [AttendanceController::class, 'store']);
-    Route::get('/attendances/{id}', [AttendanceController::class, 'show']);
-    Route::put('/attendances/{id}', [AttendanceController::class, 'update']);
-    Route::patch('/attendances/{id}', [AttendanceController::class, 'update']);
-    Route::delete('/attendances/{id}', [AttendanceController::class, 'destroy']);
+    // Attendance (Check-in/Check-out)
+    Route::post('/events/{eventId}/checkin', [AttendanceController::class, 'checkIn']);
+    Route::post('/events/{eventId}/checkout', [AttendanceController::class, 'checkOut']); 
+    Route::get('/events/{eventId}/attendees', [AttendanceController::class, 'getAttendees']);
+    Route::get('/my-events', [AttendanceController::class, 'myEvents']);
     
-    // Attendance by event/user
-    Route::get('/events/{eventId}/attendances', [AttendanceController::class, 'getByEvent']);
-    Route::get('/users/{userId}/attendances', [AttendanceController::class, 'getByUser']);
-    
-    // ============================================
-    // EVENT ASSIGNMENTS
-    // ============================================
-    Route::get('/event-assignments', [EventAssignmentController::class, 'index']);
-    Route::post('/event-assignments', [EventAssignmentController::class, 'store']);
-    Route::get('/event-assignments/{id}', [EventAssignmentController::class, 'show']);
-    Route::put('/event-assignments/{id}', [EventAssignmentController::class, 'update']);
-    Route::patch('/event-assignments/{id}', [EventAssignmentController::class, 'update']);
-    Route::delete('/event-assignments/{id}', [EventAssignmentController::class, 'destroy']);
-    
-    // Assignment actions
-    Route::post('/event-assignments/{id}/confirm', [EventAssignmentController::class, 'confirm']);
-    Route::post('/event-assignments/{id}/cancel', [EventAssignmentController::class, 'cancel']);
-    Route::get('/events/{eventId}/assignments', [EventAssignmentController::class, 'getByEvent']);
-    Route::get('/users/{userId}/assignments', [EventAssignmentController::class, 'getByUser']);
-    
-    // ============================================
-    // ROLES
-    // ============================================
-    Route::get('/roles', [RoleController::class, 'index']);
-    Route::post('/roles', [RoleController::class, 'store']);
-    Route::get('/roles/{id}', [RoleController::class, 'show']);
-    Route::put('/roles/{id}', [RoleController::class, 'update']);
-    Route::patch('/roles/{id}', [RoleController::class, 'update']);
-    Route::delete('/roles/{id}', [RoleController::class, 'destroy']);
-    
-    // ============================================
-    // STREAKS
-    // ============================================
-    Route::get('/streaks', [StreakController::class, 'index']);
-    Route::get('/streaks/leaderboard', [StreakController::class, 'leaderboard']);
-    Route::get('/users/{userId}/streak', [StreakController::class, 'getUserStreak']);
-    Route::post('/streaks/update', [StreakController::class, 'updateStreak']);
-    Route::post('/users/{userId}/streak/reset', [StreakController::class, 'resetStreak']);
-    
-    // ============================================
-    // USERS (Basic endpoints)
-    // ============================================
-    Route::get('/users/{id}', function($id) {
-        try {
-            $user = \App\Models\User::with(['eventAssignments', 'attendances', 'streak'])
-                ->findOrFail($id);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'User retrieved successfully',
-                'data' => $user
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found'
-            ], 404);
-        }
+    // Users Management (Admin only)
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::delete('/users/{id}', [UserController::class, 'destroy']);
     });
-});
+    // User Profile (self or admin)
+    Route::get('/users/{id}', [UserController::class, 'show']);
+    Route::put('/users/{id}', [UserController::class, 'update']);
+    Route::get('/users/{id}/stats', [UserController::class, 'stats']);
 
-/*
-|--------------------------------------------------------------------------
-| For Production: Wrap in Authentication Middleware
-|--------------------------------------------------------------------------
-| Route::middleware('auth:sanctum')->group(function () {
-|     // All protected routes here
-| });
-*/
+    // Notices Management
+    Route::post('/notices', [NoticeController::class, 'store'])
+        ->middleware('role:admin,organizer');
+    Route::put('/notices/{id}', [NoticeController::class, 'update']);
+    Route::delete('/notices/{id}', [NoticeController::class, 'destroy']);
+});

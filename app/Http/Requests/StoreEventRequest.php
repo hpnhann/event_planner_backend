@@ -6,9 +6,6 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreEventRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         // For now return true, later can check if user has permission
@@ -25,32 +22,37 @@ class StoreEventRequest extends FormRequest
     {
         return [
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'required|string',
+            'location' => 'required|string|max:255',
             'start_date' => 'required|date|after:now',
             'end_date' => 'required|date|after:start_date',
-            'location' => 'nullable|string|max:255',
             'max_participants' => 'nullable|integer|min:1',
-            'status' => 'nullable|in:draft,published,completed,cancelled',
-            'created_by' => 'required|exists:users,id'
+            'registration_deadline' => 'nullable|date|before:start_date',
+            'status' => 'sometimes|in:draft,published,cancelled',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', 
+        
         ];
     }
 
     /**
-     * Get custom error messages for validation rules.
+     * Get custom messages for validator errors.
      */
     public function messages(): array
     {
         return [
             'title.required' => 'Event title is required',
-            'title.max' => 'Event title cannot exceed 255 characters',
-            'start_date.required' => 'Start date is required',
-            'start_date.after' => 'Start date must be in the future',
-            'end_date.required' => 'End date is required',
-            'end_date.after' => 'End date must be after start date',
-            'max_participants.min' => 'Maximum participants must be at least 1',
-            'status.in' => 'Status must be one of: draft, published, completed, cancelled',
-            'created_by.required' => 'Creator user ID is required',
-            'created_by.exists' => 'The specified user does not exist',
+            'description.required' => 'Event description is required',
+            'location.required' => 'Event location is required',
+            'start_date.required' => 'Event start date is required',
+            'start_date.after' => 'Event must start in the future',
+            'end_date.required' => 'Event end date is required',
+            'end_date.after' => 'Event must end after start date',
+            'max_participants.integer' => 'Max participants must be a number',
+            'max_participants.min' => 'Max participants must be at least 1',
+            'registration_deadline.before' => 'Registration deadline must be before event start',
+            'status.in' => 'Invalid event status',
+            'image.image' => 'File must be an image',
+            'image.max' => 'Image size cannot exceed 5MB',
         ];
     }
 
@@ -63,7 +65,6 @@ class StoreEventRequest extends FormRequest
             'start_date' => 'start date',
             'end_date' => 'end date',
             'max_participants' => 'maximum participants',
-            'created_by' => 'creator',
         ];
     }
 
@@ -75,15 +76,10 @@ class StoreEventRequest extends FormRequest
         // Auto-set status to 'draft' if not provided
         if (!$this->has('status')) {
             $this->merge([
+                'created_by' => auth()->id(),
                 'status' => 'draft'
             ]);
         }
-
-        // If using Auth, can auto-set created_by
-        // if (Auth::check() && !$this->has('created_by')) {
-        //     $this->merge([
-        //         'created_by' => Auth::id()
-        //     ]);
-        // }
+        
     }
 }
